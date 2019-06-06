@@ -297,30 +297,18 @@ def process_range_question_type(row):
     return new_dict
 
 
-def workbook_to_json(
-    workbook_dict, form_name=None, default_language="default", warnings=None
-):
+def _prepare_workbook(workbook_dict, form_name=None, default_language="default"):
     """
-    workbook_dict -- nested dictionaries representing a spreadsheet.
-                    should be similar to those returned by xls_to_dict
-    form_name -- The spreadsheet's filename
-    default_language -- default_language does two things:
-    1. In the xform the default language is the language reverted to when
-       there is no translation available for some itext element. Because
-       of this every itext element must have a default language translation.
-    2. In the workbook if media/labels/hints that do not have a
-       language suffix will be treated as though their suffix is the
-       default language.
-       If the default language is used as a suffix for media/labels/hints,
-       then the suffixless version will be overwritten.
-    warnings -- an optional list which warnings will be appended to
+    Calls required functions that will prepare the workbook dict
+    as well as any arguments that need pre-processing
 
-    returns a nested dictionary equivalent to the format specified in the
-    json form spec.
+    preparations include:
+    1.  making sure the workbook_dict has all the required column headers
+
+    :param workbook_dict:
+    :return:
     """
-    # ensure required headers are present
-    if warnings is None:
-        warnings = []
+
     is_valid = False
     workbook_dict = {x.lower(): y for x, y in workbook_dict.items()}
     for row in workbook_dict.get(constants.SURVEY, []):
@@ -332,82 +320,83 @@ def workbook_to_json(
             "The survey sheet is either empty or missing important " "column headers."
         )
 
-    row_format_string = "[row : %s]"
-
     # Make sure the passed in vars are unicode
     form_name = unicode(form_name)
     default_language = unicode(default_language)
 
-    # We check for double columns to determine whether to use them
-    # or single colons to delimit grouped headers.
-    # Single colons are bad because they conflict with with the xform namespace
-    # syntax (i.e. jr:constraintMsg),
-    # so we only use them if we have to for backwards compatibility.
-    use_double_colons = has_double_colon(workbook_dict)
+    return workbook_dict, form_name, default_language
 
-    # Break the spreadsheet dict into easier to access objects
-    # (settings, choices, survey_sheet):
-    # ########## Settings sheet ##########
-    settings_sheet_headers = workbook_dict.get(constants.SETTINGS, [])
-    try:
-        if (
-            sum(
-                [
-                    element in [constants.ID_STRING, "form_id"]
-                    for element in settings_sheet_headers[0].keys()
-                ]
-            )
-            == 2
-        ):
-            settings_sheet_headers[0].pop(constants.ID_STRING, None)
-            warnings.append(
-                "The form_id and id_sting column headers are both"
-                " specified in the settings sheet provided."
-                " This may cause errors during conversion."
-                " In future, its best to avoid specifying both"
-                " column headers in the settings sheet."
-            )
-    except IndexError:  # In case there is no settings sheet
-        settings_sheet_headers = []
+def _create_json_root(workbook_dict, default_language, form_name, use_double_colons):
+        """
+        Creates the root json object
 
-    settings_sheet = dealias_and_group_headers(
-        settings_sheet_headers, aliases.settings_header, use_double_colons
-    )
-    settings = settings_sheet[0] if len(settings_sheet) > 0 else {}
-    replace_smart_quotes_in_dict(settings)
+        :param workbook_dict:
+        :param default_language:
+        :return:
+        """
+        settings_sheet_headers = workbook_dict.get(constants.SETTINGS, [])
+        try:
+            if (
+                    sum(
+                        [
+                            element in [constants.ID_STRING, "form_id"]
+                            for element in settings_sheet_headers[0].keys()
+                        ]
+                    )
+                    == 2
+            ):
+                settings_sheet_headers[0].pop(constants.ID_STRING, None)
+                warnings.append(
+                    "The form_id and id_sting column headers are both"
+                    " specified in the settings sheet provided."
+                    " This may cause errors during conversion."
+                    " In future, its best to avoid specifying both"
+                    " column headers in the settings sheet."
+                )
+        except IndexError:  # In case there is no settings sheet
+            settings_sheet_headers = []
 
-    default_language = settings.get(constants.DEFAULT_LANGUAGE, default_language)
-
-    # add_none_option is a boolean that when true,
-    # indicates a none option should automatically be added to selects.
-    # It should probably be deprecated but I haven't checked yet.
-    if "add_none_option" in settings:
-        settings["add_none_option"] = aliases.yes_no.get(
-            settings["add_none_option"], False
+        settings_sheet = dealias_and_group_headers(
+            settings_sheet_headers, aliases.settings_header, use_double_colons
         )
+        settings = settings_sheet[0] if len(settings_sheet) > 0 else {}
+        replace_smart_quotes_in_dict(settings)
 
-    # Here we create our json dict root with default settings:
-    id_string = settings.get(constants.ID_STRING, form_name)
-    sms_keyword = settings.get(constants.SMS_KEYWORD, id_string)
-    json_dict = {
-        constants.TYPE: constants.SURVEY,
-        constants.NAME: form_name,
-        constants.TITLE: id_string,
-        constants.ID_STRING: id_string,
-        constants.SMS_KEYWORD: sms_keyword,
-        constants.DEFAULT_LANGUAGE: default_language,
-        # By default the version is based on the date and time yyyymmddhh
-        # Leaving default version out for now since it might cause
-        # problems for formhub.
-        # constants.VERSION : datetime.datetime.now().strftime("%Y%m%d%H"),
-        constants.CHILDREN: [],
-    }
-    # Here the default settings are overridden by those in the settings sheet
-    json_dict.update(settings)
+        default_language = settings.get(constants.DEFAULT_LANGUAGE, default_language)
 
-    # ########## Choices sheet ##########
-    # Columns and "choices and columns" sheets are deprecated,
-    # but we combine them with the choices sheet for backwards-compatibility.
+        # add_none_option is a boolean that when true,
+        # indicates a none option should automatically be added to selects.
+        # It should probably be deprecated but I haven't checked yet.
+
+        # -> probably git blame and check if this piece of code is required
+        # -> does not seem like its a supported option anymore
+        if "add_none_option" in settings:
+            settings["add_none_option"] = aliases.yes_no.get(
+                settings["add_none_option"], False
+            )
+
+        # Here we create our json dict root with default settings:
+        id_string = settings.get(constants.ID_STRING, form_name)
+        sms_keyword = settings.get(constants.SMS_KEYWORD, id_string)
+        json_dict = {
+            constants.TYPE: constants.SURVEY,
+            constants.NAME: form_name,
+            constants.TITLE: id_string,
+            constants.ID_STRING: id_string,
+            constants.SMS_KEYWORD: sms_keyword,
+            constants.DEFAULT_LANGUAGE: default_language,
+            # By default the version is based on the date and time yyyymmddhh
+            # Leaving default version out for now since it might cause
+            # problems for formhub.
+            # constants.VERSION : datetime.datetime.now().strftime("%Y%m%d%H"),
+            constants.CHILDREN: [],
+        }
+        # Here the default settings are overridden by those in the settings sheet
+        json_dict.update(settings)
+        return json_dict, settings
+
+
+def _create_choices_dict(workbook_dict, default_language, use_double_colons):
     choices_and_columns_sheet = workbook_dict.get(constants.CHOICES_AND_COLUMNS, {})
     choices_and_columns_sheet = dealias_and_group_headers(
         choices_and_columns_sheet,
@@ -437,9 +426,76 @@ def workbook_to_json(
     combined_lists = group_dictionaries_by_key(
         choices_and_columns_sheet + choices_sheet + columns_sheet, constants.LIST_NAME
     )
+    return combined_lists
 
+def workbook_to_json(
+    workbook_dict, form_name=None, default_language="default", warnings=None
+):
+    """
+    workbook_dict -- nested dictionaries representing a spreadsheet.
+                    should be similar to those returned by xls_to_dict
+    form_name -- The spreadsheet's filename
+    default_language -- default_language does two things:
+    1. In the xform the default language is the language reverted to when
+       there is no translation available for some itext element. Because
+       of this every itext element must have a default language translation.
+    2. In the workbook if media/labels/hints that do not have a
+       language suffix will be treated as though their suffix is the
+       default language.
+       If the default language is used as a suffix for media/labels/hints,
+       then the suffixless version will be overwritten.
+    warnings -- an optional list which warnings will be appended to
+
+    returns a nested dictionary equivalent to the format specified in the
+    json form spec.
+    """
+    # ensure required headers are present
+
+    """
+    *************************************************************************
+    We obviously cannot separate out and encapsulate the warning systems 
+    The warning checks are such that tightly coupled and warnings check must
+    follow the flow of execution to be able to be detected, what i mean is
+    that the warning checks, i dont know how to organize my thoughts in regard to this issue.
+    
+    1 So apparently seems like we can abstract away a workbook dict preparation step
+    
+    """
+    if warnings is None:
+        warnings = []
+
+    workbook_dict, form_name, default_language = _prepare_workbook(workbook_dict, form_name, default_language)
+
+
+    row_format_string = "[row : %s]"
+
+    # We check for double columns to determine whether to use them
+    # or single colons to delimit grouped headers.
+    # Single colons are bad because they conflict with with the xform namespace
+    # syntax (i.e. jr:constraintMsg),
+    # so we only use them if we have to for backwards compatibility.
+    use_double_colons = has_double_colon(workbook_dict)
+
+    # Break the spreadsheet dict into easier to access objects
+    # (settings, choices, survey_sheet):
+    # ########## Settings sheet ##########
+
+    # -> ok so the objective here is to break the dict into easier to access
+    # -> then i think there is an abstraction plot point we can use, we can have,
+    # -> abstractions for settings, choices, survey_sheet
+
+    import ipdb; ipdb.set_trace()
+    # -> i thin we can also abstract out the whole general first json creation code
+    json_dict, settings = _create_json_root(workbook_dict, default_language, form_name, use_double_colons)
+    # ########## Choices sheet ##########
+    # Columns and "choices and columns" sheets are deprecated,
+    # but we combine them with the choices sheet for backwards-compatibility.
+
+    combined_lists = _create_choices_dict(workbook_dict, default_language, use_double_colons)
     choices = combined_lists
+
     # Make sure all the options have the required properties:
+    # -> what options are we talking about here.
     warnedabout = set()
     for list_name, options in choices.items():
         for option in options:
@@ -602,12 +658,12 @@ def workbook_to_json(
 
             if constants.TRACK_CHANGES in parameters.keys():
                 if (
-                    parameters[constants.TRACK_CHANGES] != "true"
-                    and parameters[constants.TRACK_CHANGES] != "false"
+                        parameters[constants.TRACK_CHANGES] != "true"
+                        and parameters[constants.TRACK_CHANGES] != "false"
                 ):
                     raise PyXFormError(
                         constants.TRACK_CHANGES + " must be set to true or false: "
-                        "'%s' is an invalid value" % parameters[constants.TRACK_CHANGES]
+                                                  "'%s' is an invalid value" % parameters[constants.TRACK_CHANGES]
                     )
                 else:
                     new_dict["bind"] = new_dict.get("bind", {})
@@ -638,7 +694,7 @@ def workbook_to_json(
                             "Parameter "
                             + constants.LOCATION_PRIORITY
                             + " must be set to no-power, low-power, balanced,"
-                            " or high-accuracy: '%s' is an invalid value"
+                              " or high-accuracy: '%s' is an invalid value"
                             % parameters[constants.LOCATION_PRIORITY]
                         )
 
@@ -673,7 +729,7 @@ def workbook_to_json(
                         )
 
                     if int(parameters[constants.LOCATION_MAX_AGE]) < int(
-                        parameters[constants.LOCATION_MIN_INTERVAL]
+                            parameters[constants.LOCATION_MIN_INTERVAL]
                     ):
                         raise PyXFormError(
                             "Parameter "
@@ -768,17 +824,17 @@ def workbook_to_json(
             error_message = row_format_string % row_number
             error_message += " Invalid question name [" + question_name + "] "
             error_message += (
-                "Names must begin with a letter, colon," + " or underscore."
+                    "Names must begin with a letter, colon," + " or underscore."
             )
             error_message += (
-                "Subsequent characters can include numbers," + " dashes, and periods."
+                    "Subsequent characters can include numbers," + " dashes, and periods."
             )
             raise PyXFormError(error_message)
 
         if (
-            constants.LABEL not in row
-            and row.get(constants.MEDIA) is None
-            and question_type not in aliases.label_optional_types
+                constants.LABEL not in row
+                and row.get(constants.MEDIA) is None
+                and question_type not in aliases.label_optional_types
         ):
             # TODO: Should there be a default label?
             #      Not sure if we should throw warnings for groups...
@@ -838,7 +894,7 @@ def workbook_to_json(
                         }
                     )
                     new_json_dict["control"]["jr:count"] = (
-                        "${" + generated_node_name + "}"
+                            "${" + generated_node_name + "}"
                     )
 
                 # Code to deal with table_list appearance flags
@@ -897,8 +953,8 @@ def workbook_to_json(
                 # cascading_json = get_cascading_json(
                 # cascading_choices, cascading_prefix, cascading_level)
                 if (
-                    len(cascading_choices) <= 0
-                    or "questions" not in cascading_choices[0]
+                        len(cascading_choices) <= 0
+                        or "questions" not in cascading_choices[0]
                 ):
                     raise PyXFormError(
                         "Found a cascading_select "
@@ -940,16 +996,16 @@ def workbook_to_json(
                     warnings.append(
                         row_format_string % row_number
                         + " select one external is only meant for"
-                        " filtered selects."
+                          " filtered selects."
                     )
                     select_type = aliases.select["select_one"]
                 list_name = parse_dict["list_name"]
                 list_file_name, file_extension = os.path.splitext(list_name)
 
                 if (
-                    list_name not in choices
-                    and select_type != "select one external"
-                    and file_extension not in [".csv", ".xml"]
+                        list_name not in choices
+                        and select_type != "select one external"
+                        and file_extension not in [".csv", ".xml"]
                 ):
                     if not choices:
                         raise PyXFormError(
@@ -967,8 +1023,8 @@ def workbook_to_json(
                 # Validate select_multiple choice names by making sure
                 # they have no spaces (will cause errors in exports).
                 if (
-                    select_type == constants.SELECT_ALL_THAT_APPLY
-                    and file_extension not in [".csv", ".xml"]
+                        select_type == constants.SELECT_ALL_THAT_APPLY
+                        and file_extension not in [".csv", ".xml"]
                 ):
                     for choice in choices[list_name]:
                         if " " in choice[constants.NAME]:
@@ -1020,8 +1076,8 @@ def workbook_to_json(
 
                 if "randomize" in parameters.keys():
                     if (
-                        parameters["randomize"] != "true"
-                        and parameters["randomize"] != "false"
+                            parameters["randomize"] != "true"
+                            and parameters["randomize"] != "false"
                     ):
                         raise PyXFormError(
                             "randomize must be set to true or false: "
@@ -1052,8 +1108,8 @@ def workbook_to_json(
                         if choices.get(list_name):
                             new_json_dict[constants.CHOICES] = choices[list_name]
                 elif (
-                    "randomize" in parameters.keys()
-                    and parameters["randomize"] == "true"
+                        "randomize" in parameters.keys()
+                        and parameters["randomize"] == "true"
                 ):
                     new_json_dict["itemset"] = list_name
                     json_dict["choices"] = choices
@@ -1071,7 +1127,7 @@ def workbook_to_json(
                         table_list_header = {
                             constants.TYPE: select_type,
                             constants.NAME: "reserved_name_for_field_list_labels_"
-                            + str(row_number),
+                                            + str(row_number),
                             # Adding row number for uniqueness # noqa
                             constants.CONTROL: {"appearance": "label"},
                             constants.CHOICES: choices[list_name],
@@ -1083,11 +1139,11 @@ def workbook_to_json(
                     if table_list != list_name:
                         error_message = row_format_string % row_number
                         error_message += (
-                            " Badly formatted table list,"
-                            " list names don't match: "
-                            + table_list
-                            + " vs. "
-                            + list_name
+                                " Badly formatted table list,"
+                                " list names don't match: "
+                                + table_list
+                                + " vs. "
+                                + list_name
                         )
                         raise PyXFormError(error_message)
 
