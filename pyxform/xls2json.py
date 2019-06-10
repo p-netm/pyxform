@@ -4,6 +4,7 @@ A Python script to convert excel files into JSON.
 """
 from __future__ import print_function, unicode_literals
 
+import binascii
 import codecs
 import json
 import os
@@ -12,6 +13,8 @@ import sys
 import subprocess
 from collections import Counter
 
+from base64 import b64decode
+from Crypto.PublicKey import RSA
 from pyxform import aliases, constants
 from pyxform.errors import PyXFormError
 from pyxform.utils import basestring, is_valid_xml_tag, unicode, default_is_dynamic
@@ -299,6 +302,35 @@ def process_range_question_type(row):
     return new_dict
 
 
+def is_rsa_public_key_valid(key):
+    """
+    Checks that the given RSA public key is a valid key.
+
+    By Valid:
+        - checks that it is a b64 encoded string
+        - check that is contains structure of an Rsa pulic_key , i.e
+            when parsed it results in a structure with the modulus and exponent
+            as defined at:
+            https://tools.ietf.org/html/rfc3447#page-6
+
+    key (string) -- A PEM formatted RSA public key from the settings sheet
+    returns True if RSA is valid as per above restrictions else False.
+    """
+    try:
+        decoded_key = b64decode(key)
+    except (binascii.Error, TypeError):
+        # conflicted if i should raise  an error, that would add the advantage
+        # of a more informative warning message
+        return False
+    # try and see if this can be parsed into RSA components
+    try:
+        RSA_obj = RSA.importKey(decoded_key)
+        # the exponent and modulus can be got form RSA_obj
+    except ValueError:
+        return False
+    return True
+
+
 def workbook_to_json(
     workbook_dict,
     form_name=None,
@@ -380,6 +412,11 @@ def workbook_to_json(
         settings_sheet_headers, aliases.settings_header, use_double_colons
     )
     settings = settings_sheet[0] if len(settings_sheet) > 0 else {}
+
+    public_key = settings.get("public_key")
+    if public_key is not None and not is_rsa_public_key_valid(public_key):
+        warnings.append("The public_key %s is possibly invalid" % public_key)
+
     replace_smart_quotes_in_dict(settings)
 
     default_language = settings.get(constants.DEFAULT_LANGUAGE, default_language)
