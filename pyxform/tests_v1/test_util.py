@@ -1,5 +1,5 @@
-from pyxform.tests_v1.pyxform_test_case import PyxformTestCase
 from pyxform.utils import is_rsa_public_key_valid
+from pyxform.tests_v1.pyxform_test_case import PyxformTestCase
 from base64 import b64decode
 
 try:
@@ -25,6 +25,13 @@ hiKiWdhufp1d86FWGYz/i+VOmdoV+0zoyPzk+vTEG8bpiY7/UcDYY0CsrRmaMei1
 bRHBG7TQm+Afnx0s5E2bGIT5jB5cj9YaX6BqZSeodpafQjpXEJg6uufxF1Ni3Btv
 4wIDAQ
 """
+        self.assertFalse(is_rsa_public_key_valid(key5))
+
+    def test_RSA_with_bad_base64_encodings_non_space_string(self):
+        """
+        Public_key should be a valid b64 decodable string
+        """
+        key5 = """MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwOHPJWD9zc8JPBZj/UtCdHiY7I4HWt61UG1XRaGvvwUkC/y8P5Kk6dRnf3yMTBHQoisT2vU2ODWVaU5elndkhiKiWdhufp1d86FWGYz/i+VOmdoV+0zoyPzk+vTEG8bpiY7/UcDYY0CsrRmaMei115xZwQpSMpayqMjemvwGDyhy2B3Yize4yaxyLFG53wMrHEczzsYz8FuRfuKUleE/6jFc3uXZET4LJ7S76n1XU+bE+mhhoZ+tVERgaVH38l0SZljBITwHeqQ9WQckkmDfbRHBG7TQm+Afnx0s5E2bGIT5jB5cj9YaX6BqZSeodpafQjpXEJg6uufxF1Ni3Btv4wIDAQ"""
         self.assertFalse(is_rsa_public_key_valid(key5))
 
     def test_RSA_with_bad_RSA_structure(self):
@@ -60,7 +67,7 @@ bRHBG7TQm+Afnx0s5E2bGIT5jB5cj9YaX6BqZSeodpafQjpXEJg6uufxF1Ni3Btv
 """
         self.assertTrue(is_rsa_public_key_valid(key1))
 
-    @mock.patch("pyxform.xls2json.RSA_is_valid")
+    @mock.patch("pyxform.utils.is_rsa_public_key_valid")
     def test_RSA_is_called(self, RSA_func_mock):
         """
         Uses the RSA_is_valid function
