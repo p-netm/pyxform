@@ -4,7 +4,6 @@ A Python script to convert excel files into JSON.
 """
 from __future__ import print_function, unicode_literals
 
-import binascii
 import codecs
 import json
 import os
@@ -13,11 +12,10 @@ import sys
 import subprocess
 from collections import Counter
 
-from base64 import b64decode
-from Crypto.PublicKey import RSA
+
 from pyxform import aliases, constants
 from pyxform.errors import PyXFormError
-from pyxform.utils import basestring, is_valid_xml_tag, unicode, default_is_dynamic
+from pyxform.utils import basestring, is_valid_xml_tag, unicode, default_is_dynamic, is_rsa_public_key_valid
 from pyxform.xls2json_backends import csv_to_dict, xls_to_dict
 
 SMART_QUOTES = {"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'}
@@ -300,34 +298,6 @@ def process_range_question_type(row):
     new_dict["parameters"] = parameters
 
     return new_dict
-
-
-def is_rsa_public_key_valid(key):
-    """
-    Checks that the given RSA public key is a valid key.
-
-    By Valid:
-        - checks that it is a b64 encoded string
-        - check that is contains structure of an Rsa public_key , i.e
-            when parsed it results in a structure with the modulus and exponent
-            as defined at:
-            https://tools.ietf.org/html/rfc3447#page-6
-            https://tools.ietf.org/html/rfc3447#appendix-A.1.1
-
-    key (string) -- A PEM formatted RSA public key from the settings sheet
-    returns True if RSA is valid as per above restrictions else False.
-    """
-    try:
-        decoded_key = b64decode(key)
-    except (binascii.Error, TypeError):
-        return False
-    # try and see if this can be parsed into RSA components
-    try:
-        RSA.importKey(decoded_key)  # RSA_obj
-        # the exponent and modulus can be got from RSA_obj
-    except ValueError:
-        return False
-    return True
 
 
 def workbook_to_json(

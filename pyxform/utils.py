@@ -7,8 +7,11 @@ import copy
 import json
 import os
 import re
+import binascii
 from xml.dom.minidom import Element, Text, parseString
 
+from base64 import b64decode
+from Crypto.PublicKey import RSA
 import unicodecsv as csv
 import xlrd
 
@@ -270,3 +273,30 @@ def default_is_dynamic(element_default, element_type=None):
             else:
                 expression.append(expression_element)
     return contains_dynamic
+    
+def is_rsa_public_key_valid(key):
+    """
+    Checks that the given RSA public key is a valid key.
+
+    By Valid:
+        - checks that it is a b64 encoded string
+        - check that is contains structure of an Rsa public_key , i.e
+            when parsed it results in a structure with the modulus and exponent
+            as defined at:
+            https://tools.ietf.org/html/rfc3447#page-6
+            https://tools.ietf.org/html/rfc3447#appendix-A.1.1
+
+    key (string) -- A PEM formatted RSA public key from the settings sheet
+    returns True if RSA is valid as per above restrictions else False.
+    """
+    try:
+        decoded_key = b64decode(key)
+    except (binascii.Error, TypeError):
+        return False
+    # try and see if this can be parsed into RSA components
+    try:
+        RSA.importKey(decoded_key)  # RSA_obj
+        # the exponent and modulus can be got from RSA_obj
+    except ValueError:
+        return False
+    return True
