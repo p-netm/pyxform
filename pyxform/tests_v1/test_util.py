@@ -79,3 +79,37 @@ bRHBG7TQm+Afnx0s5E2bGIT5jB5cj9YaX6BqZSeodpafQjpXEJg6uufxF1Ni3Btv
                 """
         self.md_to_pyxform_survey(md_raw=md)
         self.assertTrue(RSA_func_mock.called_once_with(None))
+
+    def test_checking_valid_rsa_passes_when_given_in_xls(self):
+        """
+        Will result in not warning in regard to the ppublic key
+        """
+        md = """
+                | survey |        |         |                |                                                         |
+                |        | type   | name    | label          | constraint                                              |
+                |        | text   | Part_ID | Participant ID | pulldata('ID', 'ParticipantID', 'ParticipantIDValue',.) |
+                | settings|                    |              |                        |             |
+                |         | public_key                        | version                | form_id     |
+                |         |gMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyibGC058iXS8cscsHdPLCgVrFx/t6WcXiwUkylerKZO4zvTA/N4CEJwdySCdyHs6AMmbcnUN1/kijZer4xARbIa+mO+NuDh33K4qRyIPx8iR/qZxgt0psnooUZV22Ye0dflPXp9PlS0LnyCQjangIim/iquKkXdCwCmPeSaXHQttfW4cNVbq0wvg8HHeNYlvTvxbRq0/CVImGwx2jROYhHH96hAnRfeiMAc6zCxBMNuR1dIp/7XheWc/lN3fCK9SMul7PWUvydtdv6uThScA0bxsP/w2msnuZyZjWmMm96Kg0SVwaFzLxCKkLzifbprvyC7yDAlW2yjjUROhGCOOswIDAQAB| vWvvk3GYzjXcJQyvTWELej | AUTO-v2-jef |
+                """
+        warnings = []
+        self.md_to_pyxform_survey(md_raw=md, kwargs={'warnings': warnings})
+        rsa_warnings = [warning for warning in  warnings if warning.startswith('The public_key ') ]
+        self.assertTrue(len(rsa_warnings), 0)
+
+    def test_checking_valid_rsa_fails_when_given_in_xls(self):
+            """
+            will result in a warning during evaluating validity of key.
+            """
+            md = """
+                    | survey |        |         |                |                                                         |
+                    |        | type   | name    | label          | constraint                                              |
+                    |        | text   | Part_ID | Participant ID | pulldata('ID', 'ParticipantID', 'ParticipantIDValue',.) |
+                    | settings|                    |              |                        |             |
+                    |         | public_key                        | version                | form_id     |
+                    |         |gMIIBIjANZgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyibGC058iXS8cscsHdPLCgVrFx/t6WcXiwUkylerKZO4zvTA/N4CEJwdySCdyHs6AMmbcnUN1/kijZer4xARbIa+mO+NuDh33K4qRyIPx8iR/qZxgt0psnooUZV22Ye0dflPXp9PlS0LnyCQjangIim/iquKkXdCwCmPeSaXHQttfW4cNVbq0wvg8HHeNYlvTvxbRq0/CVImGwx2jROYhHH96hAnRfeiMAc6zCxBMNuR1dIp/7XheWc/lN3fCK9SMul7PWUvydtdv6uThScA0bxsP/w2msnuZyZjWmMm96Kg0SVwaFzLxCKkLzifbprvyC7yDAlW2yjjUROhGCOOswIDAQAB| vWvvk3GYzjXcJQyvTWELej | AUTO-v2-jef |
+                    """
+            warnings = []
+            self.md_to_pyxform_survey(md_raw=md, kwargs={'warnings': warnings})
+            rsa_warnings = [warning for warning in warnings if warning.startswith('The public_key ')]
+            self.assertTrue(len(rsa_warnings), 1)
