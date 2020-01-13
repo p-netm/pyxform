@@ -273,7 +273,8 @@ def default_is_dynamic(element_default, element_type=None):
             else:
                 expression.append(expression_element)
     return contains_dynamic
-    
+
+
 def is_rsa_public_key_valid(key):
     """
     Checks that the given RSA public key is a valid key.

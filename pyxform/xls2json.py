@@ -15,7 +15,13 @@ from collections import Counter
 
 from pyxform import aliases, constants
 from pyxform.errors import PyXFormError
-from pyxform.utils import basestring, is_valid_xml_tag, unicode, default_is_dynamic, is_rsa_public_key_valid
+from pyxform.utils import (
+    basestring,
+    is_valid_xml_tag,
+    unicode,
+    default_is_dynamic,
+    is_rsa_public_key_valid,
+)
 from pyxform.xls2json_backends import csv_to_dict, xls_to_dict
 
 SMART_QUOTES = {"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'}
